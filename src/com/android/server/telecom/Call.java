@@ -2151,10 +2151,15 @@ public class Call implements CreateConnectionResponse, EventManager.Loggable,
                 isWorkCall = UserUtil.isManagedProfile(mContext, userHandle, mFlags);
             }
 
-            isCallRecordingToneSupported = (phoneAccount.hasCapabilities(
-                    PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION) && phoneAccount.getExtras() != null
-                    && phoneAccount.getExtras().getBoolean(
-                    PhoneAccount.EXTRA_PLAY_CALL_RECORDING_TONE, false));
+            if (!mFlags.telecomResolveHiddenDependencies()) {
+                isCallRecordingToneSupported = (phoneAccount.hasCapabilities(
+                        PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION)
+                        && phoneAccount.getExtras() != null
+                        && phoneAccount.getExtras().getBoolean(
+                        PhoneAccount.EXTRA_PLAY_CALL_RECORDING_TONE, false));
+            } else {
+                isCallRecordingToneSupported = false;
+            }
             isSimCall = phoneAccount.hasCapabilities(PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION);
         }
         mIsWorkCall = isWorkCall;

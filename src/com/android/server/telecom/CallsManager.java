@@ -444,6 +444,7 @@ public class CallsManager extends Call.ListenerBase
     private final InCallController mInCallController;
     private final CallDiagnosticServiceController mCallDiagnosticServiceController;
     private final CallAudioManager mCallAudioManager;
+    /** @deprecated not used any more */
     private final CallRecordingTonePlayer mCallRecordingTonePlayer;
     private RespondViaSmsManager mRespondViaSmsManager;
     private final Ringer mRinger;
@@ -696,8 +697,13 @@ public class CallsManager extends Call.ListenerBase
                 new Ringer.VibrationEffectProxy(), mInCallController,
                 mContext.getSystemService(NotificationManager.class),
                 accessibilityManagerAdapter, featureFlags);
-        mCallRecordingTonePlayer = new CallRecordingTonePlayer(mContext, audioManager,
-                mTimeoutsAdapter, mLock);
+        if (featureFlags.telecomResolveHiddenDependencies()) {
+            // This is now deprecated
+            mCallRecordingTonePlayer = null;
+        } else {
+            mCallRecordingTonePlayer = new CallRecordingTonePlayer(mContext, audioManager,
+                    mTimeoutsAdapter, mLock);
+        }
         mCallAudioManager = new CallAudioManager(callAudioRouteAdapter,
                 this, callAudioModeStateMachineFactory.create(systemStateHelper,
                 (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE),
@@ -742,7 +748,9 @@ public class CallsManager extends Call.ListenerBase
         mListeners.add(mCallEndpointController);
         mListeners.add(mCallDiagnosticServiceController);
         mListeners.add(mCallAudioManager);
-        mListeners.add(mCallRecordingTonePlayer);
+        if (!featureFlags.telecomResolveHiddenDependencies()) {
+            mListeners.add(mCallRecordingTonePlayer);
+        }
         mListeners.add(missedCallNotifier);
         mListeners.add(mDisconnectedCallNotifier);
         mListeners.add(mHeadsetMediaButton);
