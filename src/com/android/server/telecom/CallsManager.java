@@ -75,7 +75,6 @@ import android.os.ResultReceiver;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.SystemVibrator;
-import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.BlockedNumberContract;
@@ -4629,7 +4628,6 @@ public class CallsManager extends Call.ListenerBase
             Log.i(this, "addCall(%s) is already added");
             return;
         }
-        Trace.beginSection("addCall");
         Log.i(this, "addCall(%s)", call);
         call.addListener(this);
         mCalls.add(call);
@@ -4646,20 +4644,12 @@ public class CallsManager extends Call.ListenerBase
         updateExternalCallCanPullSupport();
         // onCallAdded for calls which immediately take the foreground (like the first call).
         for (CallsManagerListener listener : mListeners) {
-            if (LogUtils.SYSTRACE_DEBUG) {
-                Trace.beginSection(listener.getClass().toString() + " addCall");
-            }
             listener.onCallAdded(call);
-            if (LogUtils.SYSTRACE_DEBUG) {
-                Trace.endSection();
-            }
         }
-        Trace.endSection();
     }
 
     @VisibleForTesting
     public void removeCall(Call call) {
-        Trace.beginSection("removeCall");
         Log.v(this, "removeCall(%s)", call);
 
         if (call.isTransactionalCall() && call.getTransactionServiceWrapper() != null) {
@@ -4686,16 +4676,9 @@ public class CallsManager extends Call.ListenerBase
             updateCanAddCall();
             updateHasActiveRttCall();
             for (CallsManagerListener listener : mListeners) {
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.beginSection(listener.getClass().toString() + " onCallRemoved");
-                }
                 listener.onCallRemoved(call);
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.endSection();
-                }
             }
         }
-        Trace.endSection();
     }
 
     private void updateHasActiveRttCall() {
@@ -4758,13 +4741,8 @@ public class CallsManager extends Call.ListenerBase
                 call.getAnalytics().setMissedReason(call.getMissedReason());
 
                 maybeShowErrorDialogOnDisconnect(call);
-
-                Trace.beginSection("onCallStateChanged");
-
                 maybeHandleHandover(call, newState);
                 notifyCallStateChanged(call, oldState, newState);
-
-                Trace.endSection();
             } else {
                 Log.i(this, "failed in setting the state to new state");
             }
@@ -4777,14 +4755,7 @@ public class CallsManager extends Call.ListenerBase
             updateCanAddCall();
             updateHasActiveRttCall();
             for (CallsManagerListener listener : mListeners) {
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.beginSection(listener.getClass().toString() +
-                            " onCallStateChanged");
-                }
                 listener.onCallStateChanged(call, oldState, newState);
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.endSection();
-                }
             }
         }
     }
@@ -4909,13 +4880,7 @@ public class CallsManager extends Call.ListenerBase
         if (newCanAddCall != mCanAddCall) {
             mCanAddCall = newCanAddCall;
             for (CallsManagerListener listener : mListeners) {
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.beginSection(listener.getClass().toString() + " updateCanAddCall");
-                }
                 listener.onCanAddCallChanged(mCanAddCall);
-                if (LogUtils.SYSTRACE_DEBUG) {
-                    Trace.endSection();
-                }
             }
         }
     }
