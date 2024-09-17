@@ -52,6 +52,7 @@ import com.android.internal.os.SomeArgs;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.server.telecom.bluetooth.BluetoothRouteManager;
 import com.android.server.telecom.flags.FeatureFlags;
+import com.android.server.telecom.metrics.TelecomMetricsController;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -172,13 +173,14 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
     private boolean mIsMute;
     private boolean mIsPending;
     private boolean mIsActive;
+    private final TelecomMetricsController mMetricsController;
 
     public CallAudioRouteController(
             Context context, CallsManager callsManager,
             CallAudioManager.AudioServiceFactory audioServiceFactory,
             AudioRoute.Factory audioRouteFactory, WiredHeadsetManager wiredHeadsetManager,
             BluetoothRouteManager bluetoothRouteManager, StatusBarNotifier statusBarNotifier,
-            FeatureFlags featureFlags) {
+            FeatureFlags featureFlags, TelecomMetricsController metricsController) {
         mContext = context;
         mCallsManager = callsManager;
         mAudioManager = context.getSystemService(AudioManager.class);
@@ -189,6 +191,7 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
         mBluetoothRouteManager = bluetoothRouteManager;
         mStatusBarNotifier = statusBarNotifier;
         mFeatureFlags = featureFlags;
+        mMetricsController = metricsController;
         mFocusType = NO_FOCUS;
         mIsScoAudioConnected = false;
         mTelecomLock = callsManager.getLock();
@@ -542,6 +545,9 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
                 mIsScoAudioConnected);
         mIsActive = active;
         mPendingAudioRoute.evaluatePendingState();
+        if (mFeatureFlags.telecomMetricsSupport()) {
+            mMetricsController.getAudioRouteStats().onRouteEnter(mPendingAudioRoute);
+        }
     }
 
     private void handleWiredHeadsetConnected() {
@@ -973,6 +979,9 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
             mIsPending = false;
             mPendingAudioRoute.clearPendingMessages();
             onCurrentRouteChanged();
+            if (mFeatureFlags.telecomMetricsSupport()) {
+                mMetricsController.getAudioRouteStats().onRouteExit(mPendingAudioRoute);
+            }
         }
     }
 
