@@ -63,7 +63,6 @@ import java.util.Objects;
 import java.util.Set;
 
 public class CallAudioRouteController implements CallAudioRouteAdapter {
-    private static final long TIMEOUT_LIMIT = 2000L;
     private static final AudioRoute DUMMY_ROUTE = new AudioRoute(TYPE_INVALID, null, null);
     private static final Map<Integer, Integer> ROUTE_MAP;
     static {
@@ -73,6 +72,7 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
         ROUTE_MAP.put(AudioRoute.TYPE_WIRED, CallAudioState.ROUTE_WIRED_HEADSET);
         ROUTE_MAP.put(AudioRoute.TYPE_SPEAKER, CallAudioState.ROUTE_SPEAKER);
         ROUTE_MAP.put(AudioRoute.TYPE_DOCK, CallAudioState.ROUTE_SPEAKER);
+        ROUTE_MAP.put(AudioRoute.TYPE_BUS, CallAudioState.ROUTE_SPEAKER);
         ROUTE_MAP.put(AudioRoute.TYPE_BLUETOOTH_SCO, CallAudioState.ROUTE_BLUETOOTH);
         ROUTE_MAP.put(AudioRoute.TYPE_BLUETOOTH_HA, CallAudioState.ROUTE_BLUETOOTH);
         ROUTE_MAP.put(AudioRoute.TYPE_BLUETOOTH_LE, CallAudioState.ROUTE_BLUETOOTH);
@@ -353,14 +353,22 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
 
         int supportMask = calculateSupportedRouteMaskInit();
         if ((supportMask & CallAudioState.ROUTE_SPEAKER) != 0) {
+            int audioRouteType = AudioRoute.TYPE_SPEAKER;
             // Create speaker routes
             mSpeakerDockRoute = mAudioRouteFactory.create(AudioRoute.TYPE_SPEAKER, null,
                     mAudioManager);
-            if (mSpeakerDockRoute == null) {
-                Log.w(this, "Can't find available audio device info for route TYPE_SPEAKER");
-            } else {
-                mTypeRoutes.put(AudioRoute.TYPE_SPEAKER, mSpeakerDockRoute);
+            // Todo(b/364562758): Represent TYPE_BUS as CallAudioState.ROUTE_SPEAKER (moving
+            // forward, we may rework this if audio fwk team decides to allow list this as a
+            // valid communication device.
+            if (mSpeakerDockRoute != null || hasBusAudioDevice()) {
+                if (mSpeakerDockRoute == null){
+                    mSpeakerDockRoute = new AudioRoute(AudioRoute.TYPE_BUS, null, null);
+                    audioRouteType = AudioRoute.TYPE_BUS;
+                }
+                mTypeRoutes.put(audioRouteType, mSpeakerDockRoute);
                 updateAvailableRoutes(mSpeakerDockRoute, true);
+            } else {
+                Log.w(this, "Can't find available audio device info for route TYPE_SPEAKER");
             }
         }
 
@@ -905,7 +913,8 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
     }
 
     private void handleSwitchSpeaker() {
-        if (mSpeakerDockRoute != null && getCallSupportedRoutes().contains(mSpeakerDockRoute)) {
+        if (mSpeakerDockRoute != null && getCallSupportedRoutes().contains(mSpeakerDockRoute)
+                && mSpeakerDockRoute.getType() == AudioRoute.TYPE_SPEAKER) {
             routeTo(mIsActive, mSpeakerDockRoute);
         } else {
             Log.i(this, "ignore switch speaker request");
@@ -923,8 +932,8 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
             // Update status bar notification if we are in a call.
             mStatusBarNotifier.notifySpeakerphone(mCallsManager.hasAnyCalls());
         } else {
-            if (mSpeakerDockRoute != null && getCallSupportedRoutes()
-                    .contains(mSpeakerDockRoute)) {
+            if (mSpeakerDockRoute != null && getCallSupportedRoutes().contains(mSpeakerDockRoute)
+                    && mSpeakerDockRoute.getType() == AudioRoute.TYPE_SPEAKER) {
                 routeTo(mIsActive, mSpeakerDockRoute);
                 // Since the route switching triggered by this message, we need to manually send it
                 // again so that we won't stuck in the pending route
@@ -1084,6 +1093,24 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
     }
 
     private AudioRoute getPreferredAudioRouteFromStrategy() {
+        // Get preferred device
+        AudioDeviceAttributes deviceAttr = getPreferredDeviceForStrategy();
+        Log.i(this, "getPreferredAudioRouteFromStrategy: preferred device is %s", deviceAttr);
+        if (deviceAttr == null) {
+            return null;
+        }
+
+        // Get corresponding audio route
+        @AudioRoute.AudioRouteType int type = AudioRoute.DEVICE_INFO_TYPE_TO_AUDIO_ROUTE_TYPE.get(
+                deviceAttr.getType());
+        if (BT_AUDIO_ROUTE_TYPES.contains(type)) {
+            return getBluetoothRoute(type, deviceAttr.getAddress());
+        } else {
+            return mTypeRoutes.get(type);
+        }
+    }
+
+    private AudioDeviceAttributes getPreferredDeviceForStrategy() {
         // Get audio produce strategy
         AudioProductStrategy strategy = null;
         final AudioAttributes attr = new AudioAttributes.Builder()
@@ -1099,21 +1126,26 @@ public class CallAudioRouteController implements CallAudioRouteAdapter {
             return null;
         }
 
-        // Get preferred device
-        AudioDeviceAttributes deviceAttr = mAudioManager.getPreferredDeviceForStrategy(strategy);
-        Log.i(this, "getPreferredAudioRouteFromStrategy: preferred device is %s", deviceAttr);
-        if (deviceAttr == null) {
-            return null;
-        }
+        return mAudioManager.getPreferredDeviceForStrategy(strategy);
+    }
 
-        // Get corresponding audio route
-        @AudioRoute.AudioRouteType int type = AudioRoute.DEVICE_INFO_TYPETO_AUDIO_ROUTE_TYPE.get(
-                deviceAttr.getType());
-        if (BT_AUDIO_ROUTE_TYPES.contains(type)) {
-            return getBluetoothRoute(type, deviceAttr.getAddress());
-        } else {
-            return mTypeRoutes.get(type);
+    /**
+     * For auto, there is no earpiece or speakerphone routes available. The audio is routed to the
+     * bus but because this isn't a valid communication device,
+     * {@link AudioManager#getCommunicationDevice()} will not provide this device even if audio fwk
+     * reports it as the active communication device (refer to
+     * AudioDeviceBroker#getCommunicationDeviceInt()}. Check if the device is the preferred device
+     * for strategy instead.
+     */
+    private boolean hasBusAudioDevice() {
+        AudioDeviceAttributes deviceAttr = getPreferredDeviceForStrategy();
+        if (deviceAttr == null) {
+            return false;
         }
+        // Get corresponding audio route mapping
+        @AudioRoute.AudioRouteType int type = AudioRoute.DEVICE_INFO_TYPE_TO_AUDIO_ROUTE_TYPE.get(
+                deviceAttr.getType());
+        return type == AudioRoute.TYPE_BUS;
     }
 
     private AudioRoute getPreferredAudioRouteFromDefault(boolean includeBluetooth,
