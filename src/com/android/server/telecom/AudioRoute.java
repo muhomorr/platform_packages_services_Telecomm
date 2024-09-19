@@ -251,10 +251,6 @@ public class AudioRoute {
             BluetoothRouteManager bluetoothRouteManager, boolean isScoAudioConnected) {
         Log.i(this, "onDestRouteAsPendingRoute: active (%b), type (%s)", active,
                 DEVICE_TYPE_STRINGS.get(mAudioRouteType));
-        if (mAudioRouteType == TYPE_BUS) {
-            Log.i(this, "onDestRouteAsPendingRoute: Ignore processing dest route for TYPE_BUS");
-            return;
-        }
         if (pendingAudioRoute.isActive() && !active) {
             clearCommunicationDevice(pendingAudioRoute, bluetoothRouteManager, audioManager);
         } else if (active) {
@@ -316,10 +312,6 @@ public class AudioRoute {
     void onOrigRouteAsPendingRoute(boolean active, PendingAudioRoute pendingAudioRoute,
             AudioManager audioManager, BluetoothRouteManager bluetoothRouteManager) {
         Log.i(this, "onOrigRouteAsPendingRoute: active (%b), type (%d)", active, mAudioRouteType);
-        if (mAudioRouteType == TYPE_BUS) {
-            Log.i(this, "onOrigRouteAsPendingRoute: Ignore processing dest route for TYPE_BUS");
-            return;
-        }
         if (active) {
             if (mAudioRouteType == TYPE_SPEAKER) {
                 pendingAudioRoute.addMessage(SPEAKER_OFF, null);
